@@ -1,0 +1,119 @@
+<!--
+  Gerador de Arquivos para n8n
+  Salve este arquivo como index.html e arraste a pasta para o Netlify (Drag & Drop) ou conecte via Git.
+-->
+<div class="gerador-n8n" style="font-family:Arial,sans-serif; padding:20px; background:#fff; max-width:800px; margin:auto;">
+  <h2 style="color:#333; margin-bottom:15px;">Gerador de Arquivos n8n (VPS / EasyPanel)</h2>
+
+  <label for="project" style="font-weight:bold; display:block; margin:10px 0 5px;">Nome do Projeto</label>
+  <input id="project" type="text" placeholder="Ex: p2" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; margin-bottom:15px;" />
+
+  <label for="dominio" style="font-weight:bold; display:block; margin:10px 0 5px;">Domínio Base</label>
+  <input id="dominio" type="text" placeholder="Ex: suadominio.com" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; margin-bottom:15px;" />
+
+  <button id="btnGerar" style="background:#0073aa; color:#fff; border:none; padding:10px 20px; cursor:pointer; border-radius:4px;">Gerar JSONs</button>
+
+  <section style="margin-top:30px;">
+    <h3 style="color:#333;">Infraestrutura.json</h3>
+    <button id="copyInfra" style="background:#28a745; color:#fff; border:none; padding:6px 12px; cursor:pointer; border-radius:4px; margin-bottom:8px;">Copiar Infraestrutura</button>
+    <pre id="infra" style="background:#f4f4f4; padding:10px; border-left:4px solid #0073aa; white-space:pre-wrap; border-radius:4px; max-height:300px; overflow:auto;"></pre>
+  </section>
+
+  <section style="margin-top:30px;">
+    <h3 style="color:#333;">Servicos.json</h3>
+    <button id="copyServicos" style="background:#28a745; color:#fff; border:none; padding:6px 12px; cursor:pointer; border-radius:4px; margin-bottom:8px;">Copiar Serviços</button>
+    <pre id="servicos" style="background:#f4f4f4; padding:10px; border-left:4px solid #0073aa; white-space:pre-wrap; border-radius:4px; max-height:300px; overflow:auto;"></pre>
+  </section>
+</div>
+
+<script>
+(function(){
+  function gerarSenha(t = 16) {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    return Array.from({ length: t }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  }
+
+  function gerar() {
+    const proj = document.getElementById('project').value.trim();
+    const dom  = document.getElementById('dominio').value.trim();
+    if (!proj || !dom) {
+      alert('Por favor, preencha todos os campos.');
+      return;
+    }
+
+    const sp = gerarSenha();
+    const sr = gerarSenha();
+    const ck = gerarSenha(32);
+
+    const infra = {
+      services: [
+        { type: 'postgres', data: { projectName: proj, serviceName: 'n8n_postgres', image: 'postgres:16', password: sp } },
+        { type: 'redis',    data: { projectName: proj, serviceName: 'redis_n8n',  image: 'redis:7',     password: sr } }
+      ]
+    };
+
+    const env =
+      `DB_POSTGRESDB_DATABASE=${proj}\n` +
+      `DB_POSTGRESDB_HOST=${proj}_n8n_postgres\n` +
+      `DB_POSTGRESDB_PASSWORD=${sp}\n` +
+      `DB_POSTGRESDB_PORT=5432\n` +
+      `DB_POSTGRESDB_USER=postgres\n` +
+      `DB_TYPE=postgresdb\n` +
+      `QUEUE_BULL_REDIS_HOST=${proj}_redis_n8n\n` +
+      `QUEUE_BULL_REDIS_PASSWORD=${sr}\n` +
+      `QUEUE_BULL_REDIS_PORT=6379\n` +
+      `EXECUTIONS_MODE=queue\n` +
+      `EXECUTIONS_DATA_MAX_AGE=336\n` +
+      `EXECUTIONS_DATA_PRUNE=true\n` +
+      `GENERIC_TIMEZONE=America/Sao_Paulo\n` +
+      `N8N_DIAGNOSTICS_ENABLED=false\n` +
+      `N8N_EDITOR_BASE_URL=https://n8neditor.${dom}\n` +
+      `N8N_ENCRYPTION_KEY=${ck}\n` +
+      `N8N_HOST=n8neditor.${dom}\n` +
+      `N8N_PROTOCOL=https\n` +
+      `NODE_ENV=production\n` +
+      `NODE_FUNCTION_ALLOW_EXTERNAL=moment,lodash,moment-with-locales\n` +
+      `N8N_LOG_LEVEL=debug\n` +
+      `N8N_LOG_OUTPUT=file,console\n` +
+      `N8N_LOG_FILE_LOCATION=/home/node/.n8n/logs/n8n-01.log\n` +
+      `TZ=America/Sao_Paulo\n` +
+      `WEBHOOK_URL=https://n8nwebhook.${dom}`;
+
+    const mount = [ { type: 'volume', name: 'data', mountPath: '/home/node/.n8n' } ];
+
+    const services = ['editor','webhook','worker'].map(role => ({
+      type: 'app',
+      data: {
+        projectName: proj,
+        serviceName: `n8n_${role}`,
+        source: { type: 'image', image: 'n8nio/n8n:latest' },
+        env,
+        deploy: {
+          replicas: 1,
+          command: role === 'worker'
+                    ? 'n8n worker --concurrency=5'
+                    : (role === 'webhook' ? 'n8n webhook' : 'n8n start'),
+          zeroDowntime: true
+        },
+        domains: role !== 'worker'
+                 ? [ { host: `n8n${role}.${dom}`, https: true, port: 5678, path: '/', wildcard: false } ]
+                 : [],
+        mounts: mount
+      }
+    }));
+
+    document.getElementById('infra').textContent     = JSON.stringify(infra, null, 2);
+    document.getElementById('servicos').textContent  = JSON.stringify({ services }, null, 2);
+  }
+
+  document.getElementById('btnGerar').addEventListener('click', gerar);
+  document.getElementById('copyInfra').addEventListener('click', () => {
+    navigator.clipboard.writeText(document.getElementById('infra').textContent);
+    alert('Infraestrutura JSON copiado!');
+  });
+  document.getElementById('copyServicos').addEventListener('click', () => {
+    navigator.clipboard.writeText(document.getElementById('servicos').textContent);
+    alert('Serviços JSON copiado!');
+  });
+})();
+</script>
