@@ -1,119 +1,118 @@
-<!--
-  Gerador de Arquivos para n8n
-  Salve este arquivo como index.html e arraste a pasta para o Netlify (Drag & Drop) ou conecte via Git.
--->
-<div class="gerador-n8n" style="font-family:Arial,sans-serif; padding:20px; background:#fff; max-width:800px; margin:auto;">
-  <h2 style="color:#333; margin-bottom:15px;">Gerador de Arquivos n8n (VPS / EasyPanel)</h2>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gerador de Códigos n8n</title>
+  <style>
+    body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 0 10px; }
+    h1, h2 { color: #333; }
+    .section { margin-bottom: 24px; }
+    label { display: block; margin: 8px 0 4px; font-weight: 600; }
+    input { width: 100%; padding: 8px; margin-bottom: 12px; border: 1px solid #ccc; border-radius: 4px; }
+    button { padding: 10px 20px; border: none; background: #007bff; color: #fff; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #0056b3; }
+    pre { background: #f4f4f4; padding: 12px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; }
+  </style>
+</head>
+<body>
+  <h1>Gerador de Códigos n8n</h1>
+  <div class="section">
+    <h2>Configurações Gerais</h2>
+    <label for="projectName">Project Name</label>
+    <input id="projectName" type="text" value="p2" />
+    <label for="postgresPassword">Postgres Password</label>
+    <input id="postgresPassword" type="text" value="senha postgres" />
+    <label for="redisPassword">Redis Password</label>
+    <input id="redisPassword" type="text" value="senha redis" />
+    <label for="encryptionKey">Encryption Key</label>
+    <input id="encryptionKey" type="text" value="senha encription key" />
+    <label for="timezone">Timezone</label>
+    <input id="timezone" type="text" value="America/Sao_Paulo" />
+    <label for="editorHost">Editor Host (ex.: n8neditor.google.com)</label>
+    <input id="editorHost" type="text" value="n8neditor.google.com" />
+    <label for="webhookHost">Webhook Host (ex.: n8nwebhook.google.com)</label>
+    <input id="webhookHost" type="text" value="n8nwebhook.google.com" />
+  </div>
+  <div class="section">
+    <button id="generateBtn">Gerar Códigos</button>
+  </div>
+  <div class="section">
+    <h2>Código Infraestrutura (PostgreSQL & Redis)</h2>
+    <pre id="infraOutput"></pre>
+  </div>
+  <div class="section">
+    <h2>Código Serviços (Editor, Webhook, Worker)</h2>
+    <pre id="servicesOutput"></pre>
+  </div>
+  <script>
+    document.getElementById('generateBtn').addEventListener('click', () => {
+      const projectName = document.getElementById('projectName').value.trim();
+      const pgPass = document.getElementById('postgresPassword').value;
+      const rdPass = document.getElementById('redisPassword').value;
+      const encKey = document.getElementById('encryptionKey').value;
+      const tz = document.getElementById('timezone').value;
+      const editorHost = document.getElementById('editorHost').value.trim();
+      const webhookHost = document.getElementById('webhookHost').value.trim();
 
-  <label for="project" style="font-weight:bold; display:block; margin:10px 0 5px;">Nome do Projeto</label>
-  <input id="project" type="text" placeholder="Ex: p2" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; margin-bottom:15px;" />
+      // Infraestrutura
+      const infra = {
+        services: [
+          { type: 'postgres', data: { projectName, serviceName: projectName + '_postgres', image: 'postgres:16', password: pgPass } },
+          { type: 'redis', data: { projectName, serviceName: projectName + '_redis_n8n', image: 'redis:7', password: rdPass } }
+        ]
+      };
 
-  <label for="dominio" style="font-weight:bold; display:block; margin:10px 0 5px;">Domínio Base</label>
-  <input id="dominio" type="text" placeholder="Ex: suadominio.com" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; margin-bottom:15px;" />
+      // Ambiente base
+      const baseEnv = [
+        `DB_POSTGRESDB_DATABASE=${projectName}`,
+        `DB_POSTGRESDB_HOST=${projectName}_postgres`,
+        `DB_POSTGRESDB_PASSWORD=${pgPass}`,
+        `DB_POSTGRESDB_PORT=5432`,
+        `DB_POSTGRESDB_USER=postgres`,
+        `DB_TYPE=postgresdb`,
+        `QUEUE_BULL_REDIS_HOST=${projectName}_redis_n8n`,
+        `QUEUE_BULL_REDIS_PASSWORD=${rdPass}`,
+        `QUEUE_BULL_REDIS_PORT=6379`,
+        'EXECUTIONS_MODE=queue',
+        'EXECUTIONS_DATA_MAX_AGE=336',
+        'EXECUTIONS_DATA_PRUNE=true',
+        `GENERIC_TIMEZONE=${tz}`,
+        'N8N_DIAGNOSTICS_ENABLED=false',
+        `N8N_EDITOR_BASE_URL=https://${editorHost}`,
+        `N8N_ENCRYPTION_KEY=${encKey}`,
+        'N8N_PROTOCOL=https',
+        'NODE_ENV=production',
+        'NODE_FUNCTION_ALLOW_EXTERNAL=moment,lodash,moment-with-locales',
+        'N8N_LOG_LEVEL=debug',
+        'N8N_LOG_OUTPUT=file,console',
+        'N8N_LOG_FILE_LOCATION=/home/node/.n8n/logs/n8n-01.log',
+        `TZ=${tz}`
+      ].join('\r\n');
 
-  <button id="btnGerar" style="background:#0073aa; color:#fff; border:none; padding:10px 20px; cursor:pointer; border-radius:4px;">Gerar JSONs</button>
+      // Serviços
+      const services = [
+        { name: 'editor', command: 'n8n start', host: editorHost, path: '/' },
+        { name: 'webhook', command: 'n8n webhook', host: webhookHost, path: '/' },
+        { name: 'worker', command: 'n8n worker --concurrency=5' }
+      ].map(s => ({
+        type: 'app',
+        data: Object.assign({
+          projectName,
+          serviceName: projectName + '_' + s.name,
+          source: { type: 'image', image: 'n8nio/n8n:latest' },
+          env: baseEnv + (s.name !== 'worker' ? ('\r\nWEBHOOK_URL=https://' + s.host) : ''),
+          deploy: { replicas: 1, command: s.command, zeroDowntime: true },
+          mounts: [{ type: 'volume', name: 'data', mountPath: '/home/node/.n8n' }]
+        }, s.name !== 'worker' ? {
+          domains: [{ host: s.host, https: true, port: 5678, path: s.path, wildcard: false }]
+        } : {})
+      }));
 
-  <section style="margin-top:30px;">
-    <h3 style="color:#333;">Infraestrutura.json</h3>
-    <button id="copyInfra" style="background:#28a745; color:#fff; border:none; padding:6px 12px; cursor:pointer; border-radius:4px; margin-bottom:8px;">Copiar Infraestrutura</button>
-    <pre id="infra" style="background:#f4f4f4; padding:10px; border-left:4px solid #0073aa; white-space:pre-wrap; border-radius:4px; max-height:300px; overflow:auto;"></pre>
-  </section>
-
-  <section style="margin-top:30px;">
-    <h3 style="color:#333;">Servicos.json</h3>
-    <button id="copyServicos" style="background:#28a745; color:#fff; border:none; padding:6px 12px; cursor:pointer; border-radius:4px; margin-bottom:8px;">Copiar Serviços</button>
-    <pre id="servicos" style="background:#f4f4f4; padding:10px; border-left:4px solid #0073aa; white-space:pre-wrap; border-radius:4px; max-height:300px; overflow:auto;"></pre>
-  </section>
-</div>
-
-<script>
-(function(){
-  function gerarSenha(t = 16) {
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    return Array.from({ length: t }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-  }
-
-  function gerar() {
-    const proj = document.getElementById('project').value.trim();
-    const dom  = document.getElementById('dominio').value.trim();
-    if (!proj || !dom) {
-      alert('Por favor, preencha todos os campos.');
-      return;
-    }
-
-    const sp = gerarSenha();
-    const sr = gerarSenha();
-    const ck = gerarSenha(32);
-
-    const infra = {
-      services: [
-        { type: 'postgres', data: { projectName: proj, serviceName: 'n8n_postgres', image: 'postgres:16', password: sp } },
-        { type: 'redis',    data: { projectName: proj, serviceName: 'redis_n8n',  image: 'redis:7',     password: sr } }
-      ]
-    };
-
-    const env =
-      `DB_POSTGRESDB_DATABASE=${proj}\n` +
-      `DB_POSTGRESDB_HOST=${proj}_n8n_postgres\n` +
-      `DB_POSTGRESDB_PASSWORD=${sp}\n` +
-      `DB_POSTGRESDB_PORT=5432\n` +
-      `DB_POSTGRESDB_USER=postgres\n` +
-      `DB_TYPE=postgresdb\n` +
-      `QUEUE_BULL_REDIS_HOST=${proj}_redis_n8n\n` +
-      `QUEUE_BULL_REDIS_PASSWORD=${sr}\n` +
-      `QUEUE_BULL_REDIS_PORT=6379\n` +
-      `EXECUTIONS_MODE=queue\n` +
-      `EXECUTIONS_DATA_MAX_AGE=336\n` +
-      `EXECUTIONS_DATA_PRUNE=true\n` +
-      `GENERIC_TIMEZONE=America/Sao_Paulo\n` +
-      `N8N_DIAGNOSTICS_ENABLED=false\n` +
-      `N8N_EDITOR_BASE_URL=https://n8neditor.${dom}\n` +
-      `N8N_ENCRYPTION_KEY=${ck}\n` +
-      `N8N_HOST=n8neditor.${dom}\n` +
-      `N8N_PROTOCOL=https\n` +
-      `NODE_ENV=production\n` +
-      `NODE_FUNCTION_ALLOW_EXTERNAL=moment,lodash,moment-with-locales\n` +
-      `N8N_LOG_LEVEL=debug\n` +
-      `N8N_LOG_OUTPUT=file,console\n` +
-      `N8N_LOG_FILE_LOCATION=/home/node/.n8n/logs/n8n-01.log\n` +
-      `TZ=America/Sao_Paulo\n` +
-      `WEBHOOK_URL=https://n8nwebhook.${dom}`;
-
-    const mount = [ { type: 'volume', name: 'data', mountPath: '/home/node/.n8n' } ];
-
-    const services = ['editor','webhook','worker'].map(role => ({
-      type: 'app',
-      data: {
-        projectName: proj,
-        serviceName: `n8n_${role}`,
-        source: { type: 'image', image: 'n8nio/n8n:latest' },
-        env,
-        deploy: {
-          replicas: 1,
-          command: role === 'worker'
-                    ? 'n8n worker --concurrency=5'
-                    : (role === 'webhook' ? 'n8n webhook' : 'n8n start'),
-          zeroDowntime: true
-        },
-        domains: role !== 'worker'
-                 ? [ { host: `n8n${role}.${dom}`, https: true, port: 5678, path: '/', wildcard: false } ]
-                 : [],
-        mounts: mount
-      }
-    }));
-
-    document.getElementById('infra').textContent     = JSON.stringify(infra, null, 2);
-    document.getElementById('servicos').textContent  = JSON.stringify({ services }, null, 2);
-  }
-
-  document.getElementById('btnGerar').addEventListener('click', gerar);
-  document.getElementById('copyInfra').addEventListener('click', () => {
-    navigator.clipboard.writeText(document.getElementById('infra').textContent);
-    alert('Infraestrutura JSON copiado!');
-  });
-  document.getElementById('copyServicos').addEventListener('click', () => {
-    navigator.clipboard.writeText(document.getElementById('servicos').textContent);
-    alert('Serviços JSON copiado!');
-  });
-})();
-</script>
+      // Renderizar
+      document.getElementById('infraOutput').textContent = JSON.stringify(infra, null, 2);
+      document.getElementById('servicesOutput').textContent = JSON.stringify({ services }, null, 2);
+    });
+  </script>
+</body>
+</html>
