@@ -1,118 +1,206 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gerador de Códigos n8n</title>
-  <style>
-    body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 0 10px; }
-    h1, h2 { color: #333; }
-    .section { margin-bottom: 24px; }
-    label { display: block; margin: 8px 0 4px; font-weight: 600; }
-    input { width: 100%; padding: 8px; margin-bottom: 12px; border: 1px solid #ccc; border-radius: 4px; }
-    button { padding: 10px 20px; border: none; background: #007bff; color: #fff; border-radius: 4px; cursor: pointer; }
-    button:hover { background: #0056b3; }
-    pre { background: #f4f4f4; padding: 12px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>n8n Configuration Generator</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/babel-standalone@7.24.7/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body>
-  <h1>Gerador de Códigos n8n</h1>
-  <div class="section">
-    <h2>Configurações Gerais</h2>
-    <label for="projectName">Project Name</label>
-    <input id="projectName" type="text" value="p2" />
-    <label for="postgresPassword">Postgres Password</label>
-    <input id="postgresPassword" type="text" value="senha postgres" />
-    <label for="redisPassword">Redis Password</label>
-    <input id="redisPassword" type="text" value="senha redis" />
-    <label for="encryptionKey">Encryption Key</label>
-    <input id="encryptionKey" type="text" value="senha encription key" />
-    <label for="timezone">Timezone</label>
-    <input id="timezone" type="text" value="America/Sao_Paulo" />
-    <label for="editorHost">Editor Host (ex.: n8neditor.google.com)</label>
-    <input id="editorHost" type="text" value="n8neditor.google.com" />
-    <label for="webhookHost">Webhook Host (ex.: n8nwebhook.google.com)</label>
-    <input id="webhookHost" type="text" value="n8nwebhook.google.com" />
-  </div>
-  <div class="section">
-    <button id="generateBtn">Gerar Códigos</button>
-  </div>
-  <div class="section">
-    <h2>Código Infraestrutura (PostgreSQL & Redis)</h2>
-    <pre id="infraOutput"></pre>
-  </div>
-  <div class="section">
-    <h2>Código Serviços (Editor, Webhook, Worker)</h2>
-    <pre id="servicesOutput"></pre>
-  </div>
-  <script>
-    document.getElementById('generateBtn').addEventListener('click', () => {
-      const projectName = document.getElementById('projectName').value.trim();
-      const pgPass = document.getElementById('postgresPassword').value;
-      const rdPass = document.getElementById('redisPassword').value;
-      const encKey = document.getElementById('encryptionKey').value;
-      const tz = document.getElementById('timezone').value;
-      const editorHost = document.getElementById('editorHost').value.trim();
-      const webhookHost = document.getElementById('webhookHost').value.trim();
+  <div id="root"></div>
+  <script type="text/babel">
+    function App() {
+      const [formData, setFormData] = React.useState({
+        projectName: '',
+        editorHost: '',
+        webhookHost: '',
+        redisPassword: '',
+        postgresPassword: '',
+        encryptionKey: ''
+      });
 
-      // Infraestrutura
-      const infra = {
-        services: [
-          { type: 'postgres', data: { projectName, serviceName: projectName + '_postgres', image: 'postgres:16', password: pgPass } },
-          { type: 'redis', data: { projectName, serviceName: projectName + '_redis_n8n', image: 'redis:7', password: rdPass } }
-        ]
+      const [infraConfig, setInfraConfig] = React.useState('');
+      const [servicesConfig, setServicesConfig] = React.useState('');
+
+      const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData({ ...formData, [name]: value });
       };
 
-      // Ambiente base
-      const baseEnv = [
-        `DB_POSTGRESDB_DATABASE=${projectName}`,
-        `DB_POSTGRESDB_HOST=${projectName}_postgres`,
-        `DB_POSTGRESDB_PASSWORD=${pgPass}`,
-        `DB_POSTGRESDB_PORT=5432`,
-        `DB_POSTGRESDB_USER=postgres`,
-        `DB_TYPE=postgresdb`,
-        `QUEUE_BULL_REDIS_HOST=${projectName}_redis_n8n`,
-        `QUEUE_BULL_REDIS_PASSWORD=${rdPass}`,
-        `QUEUE_BULL_REDIS_PORT=6379`,
-        'EXECUTIONS_MODE=queue',
-        'EXECUTIONS_DATA_MAX_AGE=336',
-        'EXECUTIONS_DATA_PRUNE=true',
-        `GENERIC_TIMEZONE=${tz}`,
-        'N8N_DIAGNOSTICS_ENABLED=false',
-        `N8N_EDITOR_BASE_URL=https://${editorHost}`,
-        `N8N_ENCRYPTION_KEY=${encKey}`,
-        'N8N_PROTOCOL=https',
-        'NODE_ENV=production',
-        'NODE_FUNCTION_ALLOW_EXTERNAL=moment,lodash,moment-with-locales',
-        'N8N_LOG_LEVEL=debug',
-        'N8N_LOG_OUTPUT=file,console',
-        'N8N_LOG_FILE_LOCATION=/home/node/.n8n/logs/n8n-01.log',
-        `TZ=${tz}`
-      ].join('\r\n');
+      const generateConfigs = () => {
+        const infra = {
+          services: [
+            {
+              type: "postgres",
+              data: {
+                projectName: formData.projectName,
+                serviceName: "n8n_postgres",
+                image: "postgres:16",
+                password: formData.postgresPassword
+              }
+            },
+            {
+              type: "redis",
+              data: {
+                projectName: formData.projectName,
+                serviceName: "redis_n8n",
+                image: "redis:7",
+                password: formData.redisPassword
+              }
+            }
+          ]
+        };
 
-      // Serviços
-      const services = [
-        { name: 'editor', command: 'n8n start', host: editorHost, path: '/' },
-        { name: 'webhook', command: 'n8n webhook', host: webhookHost, path: '/' },
-        { name: 'worker', command: 'n8n worker --concurrency=5' }
-      ].map(s => ({
-        type: 'app',
-        data: Object.assign({
-          projectName,
-          serviceName: projectName + '_' + s.name,
-          source: { type: 'image', image: 'n8nio/n8n:latest' },
-          env: baseEnv + (s.name !== 'worker' ? ('\r\nWEBHOOK_URL=https://' + s.host) : ''),
-          deploy: { replicas: 1, command: s.command, zeroDowntime: true },
-          mounts: [{ type: 'volume', name: 'data', mountPath: '/home/node/.n8n' }]
-        }, s.name !== 'worker' ? {
-          domains: [{ host: s.host, https: true, port: 5678, path: s.path, wildcard: false }]
-        } : {})
-      }));
+        const commonEnv = `DB_POSTGRESDB_DATABASE=$(PROJECT_NAME)\r\nDB_POSTGRESDB_HOST=$(PROJECT_NAME)_n8n_postgres\r\nDB_POSTGRESDB_PASSWORD=${formData.postgresPassword}\r\nDB_POSTGRESDB_PORT=5432\r\nDB_POSTGRESDB_USER=postgres\r\nDB_TYPE=postgresdb\r\nQUEUE_BULL_REDIS_HOST=$(PROJECT_NAME)_redis_n8n\r\nQUEUE_BULL_REDIS_PASSWORD=${formData.redisPassword}\r\nQUEUE_BULL_REDIS_PORT=6379\r\nEXECUTIONS_MODE=queue\r\nEXECUTIONS_DATA_MAX_AGE=336\r\nEXECUTIONS_DATA_PRUNE=true\r\nGENERIC_TIMEZONE=America/Sao_Paulo\r\nN8N_DIAGNOSTICS_ENABLED=false\r\nN8N_EDITOR_BASE_URL=https://${formData.editorHost}/\r\nN8N_ENCRYPTION_KEY=${formData.encryptionKey}\r\nN8N_HOST=${formData.editorHost}/\r\nN8N_PROTOCOL=https\r\nNODE_ENV=production\r\nNODE_FUNCTION_ALLOW_EXTERNAL=moment,lodash,moment-with-locales\r\nN8N_LOG_LEVEL=debug\r\nN8N_LOG_OUTPUT=file,console\r\nN8N_LOG_FILE_LOCATION=/home/node/.n8n/logs/n8n-01.log\r\nTZ=America/Sao_Paulo\r\nWEBHOOK_URL=https://${formData.webhookHost}/`;
 
-      // Renderizar
-      document.getElementById('infraOutput').textContent = JSON.stringify(infra, null, 2);
-      document.getElementById('servicesOutput').textContent = JSON.stringify({ services }, null, 2);
-    });
+        const services = {
+          services: [
+            {
+              type: "app",
+              data: {
+                projectName: formData.projectName,
+                serviceName: "n8n_editor",
+                source: { type: "image", image: "n8nio/n8n:latest" },
+                env: commonEnv,
+                deploy: { replicas: 1, command: "n8n start", zeroDowntime: true },
+                domains: [{ host: formData.editorHost, https: true, port: 5678, path: "/", wildcard: false }],
+                mounts: [{ type: "volume", name: "data", mountPath: "/home/node/.n8n" }]
+              }
+            },
+            {
+              type: "app",
+              data: {
+                projectName: formData.projectName,
+                serviceName: "n8n_webhook",
+                source: { type: "image", image: "n8nio/n8n:latest" },
+                env: commonEnv,
+                deploy: { replicas: 1, command: "n8n webhook", zeroDowntime: true },
+                domains: [{ host: formData.webhookHost, https: true, port: 5678, path: "/", wildcard: false }],
+                mounts: [{ type: "volume", name: "data", mountPath: "/home/node/.n8n" }]
+              }
+            },
+            {
+              type: "app",
+              data: {
+                projectName: formData.projectName,
+                serviceName: "n8n_worker",
+                source: { type: "image", image: "n8nio/n8n:latest" },
+                env: commonEnv,
+                deploy: { replicas: 1, command: "n8n worker --concurrency=5", zeroDowntime: true },
+                mounts: [{ type: "volume", name: "data", mountPath: "/home/node/.n8n" }]
+              }
+            }
+          ]
+        };
+
+        setInfraConfig(JSON.stringify(infra, null, 2));
+        setServicesConfig(JSON.stringify(services, null, 2));
+      };
+
+      const copyToClipboard = (text) => {
+        navigator.clipboard.writeText(text);
+        alert('Configuration copied to clipboard!');
+      };
+
+      return (
+        <div className="container mx-auto p-4 max-w-4xl">
+          <h1 className="text-2xl font-bold mb-4">n8n Configuration Generator</h1>
+          
+          <div className="grid grid-cols-1 gap-4 mb-6">
+            <input
+              type="text"
+              name="projectName"
+              placeholder="Project Name (e.g., p2)"
+              value={formData.projectName}
+              onChange={handleInputChange}
+              className="p-2 border rounded"
+            />
+            <input
+              type="text"
+              name="editorHost"
+              placeholder="Editor Host (e.g., n8neditor.google.com)"
+              value={formData.editorHost}
+              onChange={handleInputChange}
+              className="p-2 border rounded"
+            />
+            <input
+              type="text"
+              name="webhookHost"
+              placeholder="Webhook Host (e.g., n8nwebhook.google.com)"
+              value={formData.webhookHost}
+              onChange={handleInputChange}
+              className="p-2 border rounded"
+            />
+            <input
+              type="password"
+              name="redisPassword"
+              placeholder="Redis Password"
+              value={formData.redisPassword}
+              onChange={handleInputChange}
+              className="p-2 border rounded"
+            />
+            <input
+              type="password"
+              name="postgresPassword"
+              placeholder="PostgreSQL Password"
+              value={formData.postgresPassword}
+              onChange={handleInputChange}
+              className="p-2 border rounded"
+            />
+            <input
+              type="password"
+              name="encryptionKey"
+              placeholder="Encryption Key"
+              value={formData.encryptionKey}
+              onChange={handleInputChange}
+              className="p-2 border rounded"
+            />
+          </div>
+
+          <button
+            onClick={generateConfigs}
+            className="bg-blue-500 text-white p-2 rounded mb-6 hover:bg-blue-600"
+          >
+            Generate Configurations
+          </button>
+
+          {infraConfig && (
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold mb-2">Infrastructure Configuration (PostgreSQL and Redis)</h2>
+              <pre className="bg-gray-100 p-4 rounded overflow-auto">
+                {infraConfig}
+              </pre>
+              <button
+                onClick={() => copyToClipboard(infraConfig)}
+                className="bg-green-500 text-white p-2 rounded mt-2 hover:bg-green-600"
+              >
+                Copy Infrastructure Config
+              </button>
+            </div>
+          )}
+
+          {servicesConfig && (
+            <div>
+              <h2 className="text-xl font-semibold mb-2">Services Configuration (Editor, Webhook, Worker)</h2>
+              <pre className="bg-gray-100 p-4 rounded overflow-auto">
+                {servicesConfig}
+              </pre>
+              <button
+                onClick={() => copyToClipboard(servicesConfig)}
+                className="bg-green-500 text-white p-2 rounded mt-2 hover:bg-green-600"
+              >
+                Copy Services Config
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById('root'));
   </script>
 </body>
 </html>
